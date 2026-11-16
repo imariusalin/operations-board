@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ops Live Board — how it works</title>
+<style>
+  @page { size: A4 landscape; margin: 0; }
+
+  :root{
+    --ink:#101827;
+    --ink-soft:#43506a;
+    --muted:#6b7890;
+    --rule:#e2e7ef;
+    --rule-soft:#eef1f6;
+    --paper:#ffffff;
+    --tint:#f6f8fb;
+    --good:#0e8f63;
+    --good-bg:#e9f7f1;
+    --warn:#b4700a;
+    --warn-bg:#fdf4e3;
+    --stop:#c0392b;
+    --stop-bg:#fdeeec;
+    --cool:#1f6fd0;
+    --cool-bg:#eaf2fd;
+    --plum:#6b4bd6;
+    --plum-bg:#f0ecfd;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; background:#f0f2f6; }
+  body{
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .page{
+    position:relative;
+    width:297mm; height:210mm;
+    padding:13mm 16mm 13mm;
+    background:var(--paper);
+    page-break-after:always;
+    overflow:hidden;
+    display:flex; flex-direction:column;
+  }
+  .page:last-child{ page-break-after:auto; }
+
+  .kicker{
+    font-size:12px; letter-spacing:.17em; text-transform:uppercase;
+    color:var(--muted); font-weight:600; margin:0 0 6px;
+  }
+  h1{ font-size:37px; line-height:1.1; margin:0 0 6px; letter-spacing:-.6px; }
+  h2.title{ font-size:27px; line-height:1.15; margin:0 0 4px; letter-spacing:-.4px; }
+  .sub{ font-size:15.5px; color:var(--ink-soft); margin:0 0 11px; max-width:210mm; }
+
+  .foot{
+    position:absolute; left:18mm; right:18mm; bottom:7mm;
+    border-top:1px solid var(--rule-soft); padding-top:3.5mm;
+    font-size:11.5px; color:var(--muted);
+    display:flex; justify-content:space-between; gap:12px;
+  }
+
+  /* ---------- page 1 ---------- */
+  .cover{ display:grid; grid-template-columns: 1.15fr .85fr; gap:16mm; flex:1; align-items:start; }
+  .lede{ font-size:18px; line-height:1.6; color:var(--ink-soft); margin:0 0 9mm; }
+  .lede b{ color:var(--ink); }
+  .bignums{ display:grid; grid-template-columns:repeat(3,1fr); gap:8mm; }
+  .bignum b{ display:block; font-size:38px; line-height:1; letter-spacing:-1px; }
+  .bignum span{ display:block; font-size:13.5px; color:var(--muted); margin-top:7px; }
+
+  .askbox{
+    background:var(--tint); border:1px solid var(--rule);
+    border-radius:14px; padding:9mm 9mm 8mm;
+  }
+  .askbox h3{ font-size:16px; margin:0 0 10px; }
+  .asklist{ list-style:none; margin:0; padding:0; }
+  .asklist li{ padding:9px 0 9px 26px; position:relative; font-size:15.5px; border-top:1px solid var(--rule); }
+  .asklist li:first-child{ border-top:0; }
+  .asklist li::before{
+    content:""; position:absolute; left:4px; top:17px;
+    width:9px; height:9px; border-radius:50%; background:var(--cool);
+  }
+  .asklist small{ display:block; color:var(--muted); font-size:13px; margin-top:2px; }
+
+  /* ---------- flow (page 2) ---------- */
+  .flow{ display:grid; grid-template-columns:repeat(4, 1fr); gap:5mm; margin-top:1mm; }
+  .step{ border:1px solid var(--rule); border-radius:14px; padding:5.5mm 5mm; position:relative; background:var(--paper); }
+  .step .n{
+    width:30px; height:30px; border-radius:50%; background:var(--ink); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:700; margin-bottom:12px;
+  }
+  .step h3{ font-size:17.5px; margin:0 0 8px; }
+  .step p{ margin:0; font-size:13.8px; color:var(--ink-soft); line-height:1.55; }
+  .step .plain{ margin-top:10px; font-size:13px; color:var(--muted); border-top:1px dashed var(--rule); padding-top:9px; }
+
+  .notes{ display:grid; grid-template-columns:repeat(3,1fr); gap:8mm; margin-top:7mm; }
+  .note h4{ font-size:15.5px; margin:0 0 7px; }
+  .note p{ margin:0; font-size:13.5px; color:var(--ink-soft); line-height:1.6; }
+
+  /* ---------- screen cards (page 3) ---------- */
+  .cards{ display:grid; grid-template-columns:repeat(3,1fr); gap:5mm; margin-top:1mm; }
+  .card{ border:1px solid var(--rule); border-radius:13px; padding:4.6mm 4.6mm; }
+  .card h3{ font-size:17px; margin:0 0 4px; display:flex; align-items:center; gap:9px; }
+  .card h3 i{ font-style:normal; font-size:18px; color:var(--cool); }
+  .card .what{ font-size:13.6px; color:var(--ink-soft); margin:0 0 8px; line-height:1.5; }
+  .card .use{
+    font-size:12.5px; color:var(--ink); background:var(--tint);
+    border-radius:8px; padding:6px 8px; margin:0; line-height:1.45;
+  }
+  .card .use b{ color:var(--muted); font-weight:600; }
+
+  /* ---------- roles (page 4) ---------- */
+  .roles{ display:grid; grid-template-columns:repeat(3,1fr); gap:6mm 7mm; margin-top:2mm; }
+  .role{ border-left:4px solid var(--cool); padding:1mm 0 1mm 6mm; }
+  .role.g{ border-color:var(--good); } .role.w{ border-color:var(--warn); }
+  .role.p{ border-color:var(--plum); } .role.s{ border-color:var(--stop); }
+  .role.m{ border-color:var(--muted); }
+  .role h3{ font-size:17px; margin:0 0 2px; }
+  .role .who{ font-size:12.5px; color:var(--muted); margin:0 0 9px; }
+  .role .q{ font-size:14.5px; font-style:italic; color:var(--ink); margin:0 0 7px; }
+  .role ul{ margin:0; padding-left:17px; font-size:13.6px; color:var(--ink-soft); line-height:1.55; }
+  .role li{ margin-bottom:3px; }
+
+  /* ---------- fairness (page 5) ---------- */
+  .split{ display:grid; grid-template-columns: 1.05fr .95fr; gap:11mm; flex:1; }
+  .bar{ display:flex; height:46px; border-radius:9px; overflow:hidden; border:1px solid var(--rule); }
+  .bar div{ display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; color:#fff; }
+  .bar .counted{ background:#1f6fd0; flex:62; }
+  .bar .brk{ background:#8a9ab3; flex:12; }
+  .bar .off{ background:#8b6fdd; flex:10; }
+  .bar .idl{ background:#d98b85; flex:10; }
+  .bar .ns{ background:#c9a227; flex:6; font-size:0; }
+  .barkey{ display:grid; grid-template-columns:repeat(2,1fr); gap:4px 14px; margin-top:11px; font-size:13px; color:var(--ink-soft); }
+  .barkey span{ display:flex; align-items:center; gap:8px; }
+  .barkey i{ width:11px; height:11px; border-radius:3px; display:inline-block; }
+
+  .statuses{ margin-top:0; }
+  .statuses h3{ font-size:16px; margin:0 0 10px; }
+  .statuses table{ border-collapse:collapse; width:100%; }
+  .statuses td{ padding:6px 0; border-top:1px solid var(--rule-soft); font-size:13.4px; vertical-align:top; color:var(--ink-soft); }
+  .statuses tr:first-child td{ border-top:0; }
+  .statuses td.lbl{ width:42%; color:var(--ink); font-weight:600; white-space:nowrap; }
+  .statuses td.lbl i{ width:11px; height:11px; border-radius:3px; display:inline-block; margin-right:9px; }
+
+  .callout{
+    border-radius:12px; padding:3.6mm 4.5mm; font-size:13.4px; line-height:1.5;
+    background:var(--good-bg); border-left:4px solid var(--good); color:var(--ink);
+  }
+  .callout b{ display:block; margin-bottom:4px; }
+  .callout.warn{ background:var(--warn-bg); border-color:var(--warn); }
+  .callout.cool{ background:var(--cool-bg); border-color:var(--cool); }
+
+  h3.sec{ font-size:15.5px; margin:0 0 9px; letter-spacing:.01em; }
+
+  /* ---------- status page 6 ---------- */
+  .two{ display:grid; grid-template-columns:1fr 1fr; gap:11mm; flex:1; }
+  .ticks{ list-style:none; margin:0 0 6mm; padding:0; }
+  .ticks li{ position:relative; padding:5px 0 5px 26px; font-size:13.8px; color:var(--ink-soft); }
+  .ticks li b{ color:var(--ink); }
+  .ticks li::before{
+    content:"✓"; position:absolute; left:0; top:7px; color:var(--good); font-weight:700; font-size:15px;
+  }
+  .ticks.todo li::before{ content:"○"; color:var(--warn); }
+
+  .need{ border-collapse:collapse; width:100%; }
+  .need th{
+    text-align:left; font-size:11.5px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--muted); padding:0 10px 8px 0; border-bottom:2px solid var(--ink);
+  }
+  .need td{ padding:4.5px 10px 4.5px 0; border-bottom:1px solid var(--rule-soft); font-size:13.2px; color:var(--ink-soft); vertical-align:top; }
+  .need td.w{ color:var(--ink); font-weight:600; white-space:nowrap; }
+</style>
+</head>
+<body>
+
+<!-- ======================= PAGE 1 ======================= -->
+<section class="page">
+  <p class="kicker">Manual department · Operations Live Board</p>
+  <h1>How it works</h1>
+  <p class="sub">A plain-language guide. No technical background needed.</p>
+
+  <div class="cover">
+    <div>
+      <p class="lede">
+        Today, the pickers in the manual department scan barcodes all shift long. Those scans already exist —
+        but they disappear into the system, and nobody can see what is happening <b>right now</b>.
+      </p>
+      <p class="lede">
+        The Ops Live Board listens to exactly the same scans and turns them into one live picture of the floor:
+        <b>who is working where, how fast, and what is getting in their way</b>. It updates twice a second,
+        on a wall screen, a laptop or a phone.
+      </p>
+
+      <div class="bignums">
+        <div class="bignum"><b>12</b><span>picking stations, A to L, shown exactly as they sit on the floor</span></div>
+        <div class="bignum"><b>206</b><span>lines per hour — the one target every station is measured against</span></div>
+        <div class="bignum"><b>24 h</b><span>of history, hour by hour, ready as a printed shift handover</span></div>
+      </div>
+    </div>
+
+    <div class="askbox">
+      <h3>The three questions it answers</h3>
+      <ul class="asklist">
+        <li>Is the department on target right now?
+          <small>One number at the top of every screen, against 206 lines/hour.</small></li>
+        <li>Which station needs me, and why?
+          <small>Not just "slow" — idle, scanner dropped out, waiting, or short of stock.</small></li>
+        <li>What actually happened last night?
+          <small>Every hour of the day, with the breaks and the end-of-shift drops marked.</small></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>Page 1 of 6 · Ops Live Board — how it works</span>
+    <span>Working prototype. The people and products shown in it are invented.</span>
+  </div>
+</section>
+
+<!-- ======================= PAGE 2 ======================= -->
+<section class="page">
+  <p class="kicker">2 · The journey of one scan</p>
+  <h2 class="title">From a beep at the shelf to a number on the wall</h2>
+  <p class="sub">Four steps. It takes well under a second, and it happens for every single scan.</p>
+
+  <div class="flow">
+    <div class="step">
+      <div class="n">1</div>
+      <h3>The picker scans</h3>
+      <p>Badge at the start of the shift, then every item picked. If the scanner cannot read a label, that counts too — a failed read is information.</p>
+      <p class="plain">The picker changes nothing about how they work. No extra button, no extra step.</p>
+    </div>
+    <div class="step">
+      <div class="n">2</div>
+      <h3>The scan reaches the board</h3>
+      <p>The handheld or the wearable sends the scan straight to our small server on the warehouse network — the same way it already talks to the warehouse system.</p>
+      <p class="plain">Every type of scanner sends the same simple message, so adding a new device changes nothing else.</p>
+    </div>
+    <div class="step">
+      <div class="n">3</div>
+      <h3>The board works it out</h3>
+      <p>It recognises what the scan was — a badge, a task, a picked line, a failed read, or "no stock" — and updates that station: who is there, how long, how many lines, how fast.</p>
+      <p class="plain">Break time, time taken off task and time waiting for a missing item are taken out of the clock first.</p>
+    </div>
+    <div class="step">
+      <div class="n">4</div>
+      <h3>Everyone sees the same thing</h3>
+      <p>The updated picture is pushed to every open screen at once — the wall display, the team leader's phone, the manager's laptop.</p>
+      <p class="plain">Nobody has to refresh anything, and nobody is looking at a different version of the truth.</p>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note">
+      <h4>Why "lines per hour", and why 206?</h4>
+      <p>A line is one picked item line on an order. 206 lines in an hour is the department's agreed target, and it is the same for every station. At or above it reads green; under it reads amber. There is no second, hidden target.</p>
+    </div>
+    <div class="note">
+      <h4>Why it has to be live</h4>
+      <p>A report that arrives tomorrow morning can only explain last night. A board that updates while the shift runs lets a team leader walk to station F before an hour is lost, not after.</p>
+    </div>
+    <div class="note">
+      <h4>What it is not</h4>
+      <p>It is not a new system the pickers have to learn, and it does not replace the warehouse system. It reads what is already happening and shows it clearly. Nothing is picked, booked or shipped by this board.</p>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>Page 2 of 6 · The journey of one scan</span>
+    <span>Updates reach every screen roughly twice a second.</span>
+  </div>
+</section>
+
+<!-- ======================= PAGE 3 ======================= -->
+<section class="page">
+  <p class="kicker">3 · The screens</p>
+  <h2 class="title">Six views, one set of numbers</h2>
+  <p class="sub">Each view answers a different question — but they all add up from the same scans, so the totals always agree.</p>
+
+  <div class="cards">
+    <div class="card">
+      <h3><i>▣</i> Floor map</h3>
+      <p class="what">The department drawn the way you walk it: stations A–F down the left leg, G–L up the right. Each one is a coloured tile — green at target, amber under, red when nothing has been scanned for a while.</p>
+      <p class="use"><b>Use it when:</b> you want one glance from across the room, or you are deciding where to walk next.</p>
+    </div>
+    <div class="card">
+      <h3><i>▦</i> All stations</h3>
+      <p class="what">The same twelve stations as cards side by side: who is badged in, the current rate, a small line showing whether they are speeding up or slowing down.</p>
+      <p class="use"><b>Use it when:</b> you want to compare the whole floor properly, not just spot the red one.</p>
+    </div>
+    <div class="card">
+      <h3><i>◱</i> Station page</h3>
+      <p class="what">Everything about one station today: every picker who worked there, hour by hour, and why lines were lost — unreadable labels, missing stock, or the scanner dropping its connection.</p>
+      <p class="use"><b>Use it when:</b> a station has a bad night and you need the real reason before you talk to anyone.</p>
+    </div>
+    <div class="card">
+      <h3><i>◷</i> Management · 24 hours</h3>
+      <p class="what">The whole day from midday to midday on one chart, with breaks and end-of-shift staff losses marked. It lists the weakest hours and what was going on in each. One button prints the shift handover.</p>
+      <p class="use"><b>Use it when:</b> you hand over a shift, or you are asked why the night came out the way it did.</p>
+    </div>
+    <div class="card">
+      <h3><i>⊘</i> No stock</h3>
+      <p class="what">Every time a picker reported an item missing: which product, which location, how many were needed, and which order it was for — grouped so the repeat offenders stand out. Exports to a spreadsheet.</p>
+      <p class="use"><b>Use it when:</b> stock control needs to fix the shelf, not just hear that "things were missing".</p>
+    </div>
+    <div class="card">
+      <h3><i>≡</i> Activity &amp; Scanner</h3>
+      <p class="what">A plain running list of what happened — badged in, moved station, went idle, taken off task, scanner lost — and a panel showing the raw scans arriving, for testing a new device.</p>
+      <p class="use"><b>Use it when:</b> you need to check the board's version of events, or you are plugging in a scanner.</p>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>Page 3 of 6 · The screens</span>
+    <span>The board runs on a wall screen, a PC or a phone — the layout adapts.</span>
+  </div>
+</section>
+
+<!-- ======================= PAGE 4 ======================= -->
+<section class="page">
+  <p class="kicker">4 · The people</p>
+  <h2 class="title">Who it is for, and what each of them gets</h2>
+  <p class="sub">The same board, read differently depending on where you stand.</p>
+
+  <div class="roles">
+    <div class="role">
+      <h3>Team leader</h3>
+      <p class="who">On the floor, during the shift</p>
+      <p class="q">"Where do I need to be right now?"</p>
+      <ul>
+        <li>Live floor map on the wall and in their pocket</li>
+        <li>Sees idle and scanner problems as they start</li>
+        <li>Can take a picker off task, with a reason, so the time is not counted against them</li>
+      </ul>
+    </div>
+
+    <div class="role g">
+      <h3>Shift manager</h3>
+      <p class="who">Running the shift, handing it over</p>
+      <p class="q">"How did the shift actually go?"</p>
+      <ul>
+        <li>The 24-hour view with the weak hours called out</li>
+        <li>A printed handover in one click, with a notes field for the next shift</li>
+        <li>Facts to hand when the night is questioned</li>
+      </ul>
+    </div>
+
+    <div class="role w">
+      <h3>Stock control &amp; ops</h3>
+      <p class="who">Keeping the shelves right</p>
+      <p class="q">"What was missing, and where?"</p>
+      <ul>
+        <li>Every "no stock" with product, location, quantity and order number</li>
+        <li>The locations that fail most often</li>
+        <li>Spreadsheet export for follow-up</li>
+      </ul>
+    </div>
+
+    <div class="role p">
+      <h3>Department &amp; site management</h3>
+      <p class="who">Looking across days and shifts</p>
+      <p class="q">"Where is the capacity really going?"</p>
+      <ul>
+        <li>Output per picker-hour against 206, every hour</li>
+        <li>How deep the breaks and shift ends really cut</li>
+        <li>Evidence for staffing and equipment decisions</li>
+      </ul>
+    </div>
+
+    <div class="role s">
+      <h3>IT</h3>
+      <p class="who">Devices and network</p>
+      <p class="q">"Are the scanners healthy?"</p>
+      <ul>
+        <li>Counts and minutes of scanners losing connection, per station</li>
+        <li>Failed reads separated from genuine slowness</li>
+        <li>One small server, one network rule — nothing installed on PCs</li>
+      </ul>
+    </div>
+
+    <div class="role m">
+      <h3>HR &amp; works council</h3>
+      <p class="who">Protecting the people measured</p>
+      <p class="q">"Is this fair, and is it lawful?"</p>
+      <ul>
+        <li>One switch hides all names and shows neutral codes instead</li>
+        <li>Clear, written rules for what is and is not counted (next page)</li>
+        <li>Nothing goes live before this group has signed it off</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>Page 4 of 6 · Who it is for</span>
+    <span>The pickers themselves do nothing differently — they keep scanning as they do today.</span>
+  </div>
+</section>
+
+<!-- ======================= PAGE 5 ======================= -->
+<section class="page">
+  <p class="kicker">5 · Fairness</p>
+  <h2 class="title">How a picker is judged — and what is deliberately not counted</h2>
+  <p class="sub">A number is only worth showing if the person behind it would agree it is fair. This is the rule the whole board is built on.</p>
+
+  <div class="split">
+    <div>
+      <h3 class="sec">An hour on station, broken down</h3>
+      <div class="bar">
+        <div class="counted">Time that counts</div>
+        <div class="brk">Break</div>
+        <div class="off">Off task</div>
+        <div class="idl">Waiting</div>
+        <div class="ns">·</div>
+      </div>
+      <div class="barkey">
+        <span><i style="background:#1f6fd0"></i> Counted — picking time</span>
+        <span><i style="background:#8a9ab3"></i> Scheduled break — removed</span>
+        <span><i style="background:#8b6fdd"></i> Taken off task by a manager — removed</span>
+        <span><i style="background:#d98b85"></i> Long gaps with no scan — flagged, not hidden</span>
+        <span><i style="background:#c9a227"></i> A few seconds back for each missing item</span>
+        <span><i style="background:#8a9ab3"></i> Scanner offline — removed</span>
+      </div>
+
+      <p style="font-size:13.6px;color:var(--ink-soft);line-height:1.58;margin:4mm 0 0">
+        The speed shown is lines picked divided by the <b>time the picker could actually pick</b>, over the last ten of those
+        minutes. Someone sent to help elsewhere, sitting in a break, or stuck with a scanner that dropped its connection is
+        not punished for it. When an item is missing from the shelf, a few seconds are credited back for the walk, the check
+        and the paperwork.
+      </p>
+
+      <div class="callout cool" style="margin-top:3.5mm">
+        <b>And it waits before it judges</b>
+        A station that has only just started shows its numbers in grey until there are enough lines for the rate to mean
+        anything. An hour with barely any worked time is shown, but never marked good or bad.
+      </div>
+
+      <div class="callout warn" style="margin-top:3.5mm">
+        <b>What the board will not do</b>
+        It does not rank people in a league table and raises no alerts about individuals. It shows what happened;
+        the conversation stays between people.
+      </div>
+    </div>
+
+    <div>
+      <div class="statuses">
+        <h3 class="sec">What the colours mean</h3>
+        <table>
+          <tr><td class="lbl"><i style="background:#0e8f63"></i>At or above 206</td><td>On target. Nothing to do.</td></tr>
+          <tr><td class="lbl"><i style="background:#d9a21b"></i>Below 206</td><td>Under target with the clock running. Worth a look, not an alarm.</td></tr>
+          <tr><td class="lbl"><i style="background:#c0392b"></i>Idle</td><td>No scan for more than a minute and a half. Usually a real problem — a jam, a question, a device.</td></tr>
+          <tr><td class="lbl"><i style="background:#8b6fdd"></i>Off task</td><td>A manager moved them to something else. Measuring stops, the name stays.</td></tr>
+          <tr><td class="lbl"><i style="background:#8a9ab3"></i>On break</td><td>Scheduled break. Measuring stops for everybody at once.</td></tr>
+          <tr><td class="lbl"><i style="background:#9aa5b8"></i>Unmanned</td><td>Nobody badged in at that station.</td></tr>
+        </table>
+      </div>
+
+      <div class="callout" style="margin-top:7mm">
+        <b>Names are optional</b>
+        One switch replaces every name with a neutral code across the whole board and every printed report. The numbers
+        stay exactly the same. Which mode we run in is a decision for HR and the works council, not a technical setting.
+      </div>
+
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>Page 5 of 6 · Fairness</span>
+    <span>Thresholds (idle, break lengths, the allowance for a missing item) are settings, agreed once and written down.</span>
+  </div>
+</section>
+
+<!-- ======================= PAGE 6 ======================= -->
+<section class="page">
+  <p class="kicker">6 · Where it stands</p>
+  <h2 class="title">What is built today, and what we need from others</h2>
+  <p class="sub">The board is finished and running. What is missing is not software — it is the data feed and the sign-off.</p>
+
+  <div class="two">
+    <div>
+      <h3 class="sec">Working today</h3>
+      <ul class="ticks">
+        <li><b>The whole board.</b> All six screens, on wall, desktop and phone.</li>
+        <li><b>The rules.</b> Target, rated time, idle, breaks, off task, no stock — all live.</li>
+        <li><b>The handover.</b> Printed shift report and spreadsheet export.</li>
+        <li><b>A realistic night.</b> A simulator plays a full shift so the board can be shown and tested without touching the real floor.</li>
+        <li><b>The door for real scanners.</b> A real handheld or wearable can already send its scans to it, unchanged.</li>
+      </ul>
+
+      <h3 class="sec">Still to do</h3>
+      <ul class="ticks todo">
+        <li><b>Connect the real scanners</b> on the floor instead of the simulator.</li>
+        <li><b>Connect the warehouse system</b> so product names, order numbers and stock come from the source.</li>
+        <li><b>Keep history</b> beyond the current day, in a proper database.</li>
+        <li><b>Sign-in</b> so only managers can take someone off task.</li>
+        <li><b>Agreement from HR and the works council</b> before any real name appears.</li>
+      </ul>
+
+      <div class="callout" style="margin-top:2mm">
+        <b>The ask, in one line</b>
+        Give the board a feed of the scans that already happen, plus the order and stock data behind them —
+        it already knows what to do with them.
+      </div>
+    </div>
+
+    <div>
+      <h3 class="sec">What we need, and from whom</h3>
+      <table class="need">
+        <tr><th>Who</th><th>What we are asking for</th><th>What it gives us</th></tr>
+        <tr>
+          <td class="w">The warehouse<br>system supplier</td>
+          <td>A way to read what was ordered, what was picked, what was reported missing, and the shelf locations</td>
+          <td>Real product names, quantities and order numbers instead of placeholders</td>
+        </tr>
+        <tr>
+          <td class="w">The handheld<br>scanner supplier</td>
+          <td>Which models we have, how they are connected, and how to switch on their "could not read" signal</td>
+          <td>Every scan and every failed read, with the station it came from</td>
+        </tr>
+        <tr>
+          <td class="w">The wearable<br>scanner supplier</td>
+          <td>The toolkit for their Android device, plus the signal that tells us the ring scanner has dropped its connection</td>
+          <td>Time lost to equipment, separated from time lost to pace</td>
+        </tr>
+        <tr>
+          <td class="w">Our IT</td>
+          <td>A small server on the warehouse network the scanners can reach, and permission to install one small helper app on the devices</td>
+          <td>A route from every scanner to the board</td>
+        </tr>
+        <tr>
+          <td class="w">HR &amp;<br>works council</td>
+          <td>The real shift and break pattern, and a decision on whether names or neutral codes are used</td>
+          <td>Correct measuring windows, and a lawful, agreed way to use the data</td>
+        </tr>
+      </table>
+
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>Page 6 of 6 · Where it stands</span>
+    <span>Every supplier item differs by site and version — each one is confirmed with the vendor before it is built.</span>
+  </div>
+</section>
+
+</body>
+</html>

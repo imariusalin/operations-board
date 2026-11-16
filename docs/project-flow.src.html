@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ops Live Board — from prototype to running system</title>
+<style>
+  @page { size: A4 landscape; margin: 0; }
+
+  :root{
+    --ink:#101827;
+    --ink-soft:#43506a;
+    --muted:#6b7890;
+    --rule:#e2e7ef;
+    --rule-soft:#eef1f6;
+    --paper:#ffffff;
+    --tint:#f6f8fb;
+    --done:#0e8f63;
+    --done-bg:#e9f7f1;
+    --part:#b4700a;
+    --part-bg:#fdf4e3;
+    --todo:#1f6fd0;
+    --todo-bg:#eaf2fd;
+    --ask:#8a3ffc;
+    --ask-bg:#f2ecfe;
+    --risk:#c0392b;
+    --risk-bg:#fdeeec;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; background:#f0f2f6; }
+  body{
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+    color:var(--ink); -webkit-font-smoothing:antialiased;
+  }
+
+  .page{
+    position:relative; width:297mm; height:210mm;
+    padding:13mm 16mm 13mm; background:var(--paper);
+    page-break-after:always; overflow:hidden; display:flex; flex-direction:column;
+  }
+  .page:last-child{ page-break-after:auto; }
+
+  .kicker{ font-size:12px; letter-spacing:.17em; text-transform:uppercase; color:var(--muted); font-weight:600; margin:0 0 6px; }
+  h1{ font-size:37px; line-height:1.1; margin:0 0 6px; letter-spacing:-.6px; }
+  h2.title{ font-size:27px; line-height:1.15; margin:0 0 4px; letter-spacing:-.4px; }
+  .sub{ font-size:15.5px; color:var(--ink-soft); margin:0 0 11px; max-width:215mm; }
+  h3.sec{ font-size:15px; margin:0 0 8px; }
+
+  .foot{
+    position:absolute; left:16mm; right:16mm; bottom:7mm;
+    border-top:1px solid var(--rule-soft); padding-top:3.5mm;
+    font-size:11px; color:var(--muted); display:flex; justify-content:space-between; gap:12px;
+  }
+
+  /* status marks */
+  .m{ font-weight:700; font-style:normal; }
+  .m--done{ color:var(--done); }
+  .m--part{ color:var(--part); }
+  .m--todo{ color:var(--todo); }
+  .m--ask{ color:var(--ask); }
+
+  .legend{ display:flex; gap:12px; flex-wrap:wrap; font-size:11.4px; color:var(--ink-soft); margin:0 0 4px; }
+  .legend b{ font-weight:600; }
+
+  .chip{
+    display:inline-block; font-size:10.5px; letter-spacing:.02em; border-radius:20px;
+    padding:1px 7px; background:var(--tint); color:var(--ink-soft); border:1px solid var(--rule);
+    white-space:nowrap;
+  }
+  .chip--eur{ background:#f2f7f3; border-color:#cfe4d8; color:#13624a; }
+  .chip--time{ background:#f1f5fb; border-color:#d5e2f2; color:#1c4f8f; }
+
+  /* ---------- cover ---------- */
+  .cover{ display:grid; grid-template-columns:1.1fr .9fr; gap:14mm; flex:1; align-items:start; }
+  .lede{ font-size:16.5px; line-height:1.55; color:var(--ink-soft); margin:0 0 6mm; }
+  .lede b{ color:var(--ink); }
+  .bignums{ display:grid; grid-template-columns:repeat(3,1fr); gap:7mm; margin-top:1mm; }
+  .bignum b{ display:block; font-size:27px; line-height:1.05; letter-spacing:-.8px; white-space:nowrap; }
+  .bignum span{ display:block; font-size:12.5px; color:var(--muted); margin-top:6px; }
+  .panel{ background:var(--tint); border:1px solid var(--rule); border-radius:14px; padding:7mm; }
+  .panel h3{ font-size:15.5px; margin:0 0 9px; }
+  .panel p{ margin:0 0 9px; font-size:13.8px; color:var(--ink-soft); line-height:1.55; }
+  .panel p:last-child{ margin-bottom:0; }
+  .rail{ border-left:4px solid var(--todo); padding-left:5mm; }
+  .rail--ask{ border-color:var(--ask); }
+
+  /* ---------- mind map ---------- */
+  .mapwrap{ position:relative; flex:1; }
+  .map{
+    position:relative; z-index:2; height:100%;
+    display:grid; grid-template-columns:1fr 1.04fr 1fr; grid-template-rows:1fr auto 1fr;
+    gap:2.2mm 6mm; align-items:center;
+  }
+  .mapwrap > svg{ position:absolute; inset:0; width:100%; height:100%; z-index:1; display:block; }
+  .node{
+    background:#111827; color:#fff; border-radius:14px; padding:3.6mm 5mm; text-align:center;
+    box-shadow:0 0 0 5px #eef1f6;
+  }
+  .node h3{ margin:0 0 2px; font-size:19px; letter-spacing:-.3px; }
+  .node p{ margin:0; font-size:12.5px; color:#c8d2e2; }
+  .node .node__nums{ display:flex; justify-content:center; gap:7px; margin-top:7px; }
+  .node .chip{ background:#1f2937; border-color:#374151; color:#e5ecf6; }
+
+  .box{ border:1.6px solid var(--rule); border-radius:12px; padding:3mm 3.4mm; background:#fff; }
+  .box--src{ border-color:#d9a21b; }
+  .box--build{ border-color:#0e8f63; }
+  .box--people{ border-color:#8a3ffc; }
+  .box--money{ border-color:#1f6fd0; }
+  .box h4{ margin:0 0 3px; font-size:13.2px; display:flex; justify-content:space-between; gap:8px; align-items:baseline; }
+  .box h4 span{ font-weight:400; }
+  .box ul{ list-style:none; margin:0; padding:0; }
+  .box li{ font-size:11.3px; line-height:1.35; color:var(--ink-soft); padding:1.5px 0 1.5px 15px; position:relative; }
+  .box li .m{ position:absolute; left:0; top:2px; }
+  .box li b{ color:var(--ink); font-weight:600; }
+  .box .note{ font-size:10.3px; line-height:1.35; color:var(--muted); margin:3px 0 0; }
+
+  /* ---------- stage table ---------- */
+  .tbl{ width:100%; border-collapse:collapse; }
+  .tbl th{
+    text-align:left; font-size:10.3px; letter-spacing:.09em; text-transform:uppercase; color:var(--muted);
+    padding:0 8px 5px 0; border-bottom:2px solid var(--ink); vertical-align:bottom; white-space:nowrap;
+  }
+  .tbl td{ padding:3.4px 8px 3.4px 0; border-bottom:1px solid var(--rule-soft); font-size:12px; line-height:1.32; color:var(--ink-soft); vertical-align:top; }
+  .tbl td.w{ color:var(--ink); font-weight:600; }
+  .tbl td.n{ text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .tbl tr.total td{ border-top:2px solid var(--ink); border-bottom:0; font-weight:700; color:var(--ink); }
+  .tbl tr.done td.w{ color:var(--done); }
+
+  /* ---------- gantt ---------- */
+  .gantt{ display:grid; grid-template-columns:52mm repeat(20, 1fr); gap:8px 0; align-items:center; font-size:12px; margin-top:3mm; }
+  .gantt .hd{ font-size:10px; color:var(--muted); text-align:center; border-bottom:1px solid var(--rule); padding-bottom:3px; }
+  .gantt .lbl{ padding-right:7px; color:var(--ink); font-size:12.2px; }
+  .gantt .bar{ height:14px; border-radius:7px; background:var(--todo); position:relative; margin-right:2px; }
+  .gantt .bar--done{ background:var(--done); }
+  .gantt .bar--gate{ background:repeating-linear-gradient(45deg,#8a3ffc,#8a3ffc 4px,#b589ff 4px,#b589ff 8px); }
+  .gantt .bar span{
+    position:absolute; right:4px; top:1px; font-size:9px; line-height:12px; color:#3b1a73;
+    background:rgba(255,255,255,.92); border-radius:6px; padding:0 5px; font-weight:600;
+  }
+  .gantt .bar--done span{ color:#fff; background:transparent; font-weight:600; }
+  .gantt .tick{ border-left:1px dashed var(--rule); height:100%; }
+  .milestones{ display:grid; grid-template-columns:repeat(7,1fr); gap:5mm; margin-top:9mm; }
+  .ms{ font-size:11.4px; line-height:1.35; color:var(--ink-soft); }
+  .ms b{ display:block; color:var(--ink); font-size:12.4px; margin-bottom:2px; }
+
+  /* ---------- people map ---------- */
+  .people{ display:grid; grid-template-columns:repeat(4,1fr); gap:5mm; }
+  .who{ border:1.5px solid var(--rule); border-radius:12px; padding:3.2mm 3.4mm; }
+  .who h4{ margin:0 0 2px; font-size:13.8px; }
+  .who .role{ font-size:11px; color:var(--muted); margin:0 0 6px; }
+  .who ul{ margin:0; padding-left:15px; font-size:11.9px; color:var(--ink-soft); line-height:1.4; }
+  .who li{ margin-bottom:3px; }
+  .who .cad{ margin-top:6px; font-size:11px; color:var(--todo); font-weight:600; }
+
+  .two{ display:grid; grid-template-columns:1fr 1fr; gap:10mm; flex:1; }
+  .three{ display:grid; grid-template-columns:repeat(3,1fr); gap:8mm; }
+  .callout{ border-radius:11px; padding:3.2mm 3.8mm; font-size:12.4px; line-height:1.45; background:var(--todo-bg); border-left:4px solid var(--todo); }
+  .callout b{ display:block; margin-bottom:3px; }
+  .callout--ask{ background:var(--ask-bg); border-color:var(--ask); }
+  .callout--risk{ background:var(--risk-bg); border-color:var(--risk); }
+  .callout--done{ background:var(--done-bg); border-color:var(--done); }
+</style>
+</head>
+<body>
+
+<!-- ================= PAGE 1 — COVER ================= -->
+<section class="page">
+  <p class="kicker">Operations Live Board · Project outline</p>
+  <h1>From working demo to running system</h1>
+  <p class="sub">What is already built, what is left, who we need to talk to, and roughly what it costs in money and in weeks.</p>
+
+  <div class="cover">
+    <div>
+      <p class="lede">
+        A working board already exists. It takes the barcode scans that happen anyway on the picking floor and turns them
+        into a live picture of the department — who is working where, how fast, and what is getting in their way — plus a
+        printed handover at the end of every shift.
+      </p>
+      <p class="lede">
+        It runs today on <b>invented data</b>. Everything that remains is about replacing that invented data with the real
+        thing: getting the scanners, the warehouse system and the plant signals to talk to it, agreeing how people may be
+        measured, and running it on one department before the rest.
+      </p>
+
+      <div class="bignums">
+        <div class="bignum"><b>≈ 30%</b><span>of the whole job is already done — the part that is usually hardest to picture</span></div>
+        <div class="bignum"><b>18–22<small> wks</small></b><span>from go-ahead to the full department running, most of it waiting on other people</span></div>
+        <div class="bignum"><b>€20k–€46k</b><span>indicative remaining build cost at a placeholder day rate</span></div>
+      </div>
+
+      <div class="callout" style="margin-top:6mm">
+        <b>Every figure in this document is an estimate</b>
+        Costs are days of work at a placeholder day rate, not a quotation. Durations are elapsed weeks, including the time
+        other teams need to answer. Both tighten sharply once the first two conversations on page 5 have happened.
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>The front end is not the point</h3>
+      <p>
+        The board you have seen was built with whatever front-end technology got a convincing demo fastest. That choice is
+        deliberately disposable.
+      </p>
+      <p>
+        What matters sits behind it: the <b>rules</b> (what counts as working time, what counts as idle, what a target
+        means) and the <b>one door</b> every scan comes through. Those two were designed to outlive the screens.
+      </p>
+      <p>
+        Rebuilding the whole visible board in a different stack — a corporate framework, a different charting library, a
+        wall-display app — is roughly <b>6–10 days</b>, and changes none of the numbers it shows. The screens are the
+        cheapest part to replace and the easiest part to argue about; this document is about everything else.
+      </p>
+      <div class="rail rail--ask" style="margin-top:6mm">
+        <p style="font-size:13px;margin:0">
+          <b>One item needs defining before it can be costed:</b> the central system referred to as CSD. Everything else in
+          this plan is named, owned and estimated.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>Page 1 of 6 · Project outline</span>
+    <span>Indicative estimates · prepared for discussion, not a quotation</span>
+  </div>
+</section>
+
+<!-- ================= PAGE 2 — MIND MAP ================= -->
+<section class="page">
+  <p class="kicker">2 · The whole project on one page</p>
+  <h2 class="title" style="margin-bottom:2px">What it is made of, what each part costs, and what is done</h2>
+  <p class="legend">
+    <span><i class="m m--done">✓</i> <b>done</b> — working today</span>
+    <span><i class="m m--part">◑</i> <b>part done</b> — built, not yet connected</span>
+    <span><i class="m m--todo">○</i> <b>to do</b> — estimated below</span>
+    <span><i class="m m--ask">⚠</i> <b>to confirm</b> — not costable yet</span>
+    <span>· money indicative · time elapsed</span>
+  </p>
+
+  <div class="mapwrap">
+    <svg viewBox="0 0 1000 560" preserveAspectRatio="none" aria-hidden="true">
+      <g fill="none" stroke-width="2.2">
+        <path d="M300 115 C 420 115, 430 250, 500 270" stroke="#d9a21b"/>
+        <path d="M300 280 C 400 280, 430 272, 500 272" stroke="#d9a21b"/>
+        <path d="M300 445 C 420 445, 430 295, 500 275" stroke="#d9a21b"/>
+        <path d="M700 115 C 580 115, 570 250, 500 270" stroke="#0e8f63"/>
+        <path d="M700 280 C 600 280, 570 272, 500 272" stroke="#0e8f63"/>
+        <path d="M700 445 C 580 445, 570 295, 500 275" stroke="#0e8f63"/>
+        <path d="M500 60 L 500 240" stroke="#1f6fd0"/>
+        <path d="M500 305 L 500 500" stroke="#8a3ffc"/>
+      </g>
+    </svg>
+
+    <div class="map">
+      <!-- row 1 -->
+      <div class="box box--src" style="grid-column:1;grid-row:1">
+        <h4>Scanners on the floor <span class="chip chip--time">3–5 wks</span></h4>
+        <ul>
+          <li><i class="m m--part">◑</i> <b>Handhelds (DENSO)</b> — already accepted by the board; needs the real models and their “could not read” output switched on</li>
+          <li><i class="m m--todo">○</i> <b>Wearables (Honeywell CW45 + 8675i)</b> — a small app forwards every scan, every failed decode, and the moment the ring drops its link</li>
+        </ul>
+        <p class="note">Unlocks lines per hour, failed reads, equipment time · <span class="chip chip--eur">€4.6k–€10.4k</span></p>
+      </div>
+
+      <div class="box box--money" style="grid-column:2;grid-row:1">
+        <h4>What it costs to finish <span class="chip chip--eur">€20k–€46k</span></h4>
+        <ul>
+          <li><i class="m m--done">✓</i> <b>Spent:</b> demo, rules engine, both handovers — 18–22 days</li>
+          <li><i class="m m--todo">○</i> <b>Remaining:</b> 45–70 build days over 18–22 weeks</li>
+          <li><i class="m m--todo">○</i> <b>Not included:</b> devices, licences, server, other teams’ time</li>
+        </ul>
+        <p class="note">At a placeholder day rate · split by stage on page 3</p>
+      </div>
+
+      <div class="box box--build" style="grid-column:3;grid-row:1">
+        <h4>Already working <span class="chip chip--eur">done</span></h4>
+        <ul>
+          <li><i class="m m--done">✓</i> The live board — floor map, stations, 24-hour view</li>
+          <li><i class="m m--done">✓</i> The rules — target, working time, idle, breaks, shortages</li>
+          <li><i class="m m--done">✓</i> Two printed handovers — floor level and cost level</li>
+          <li><i class="m m--done">✓</i> One door in — any scanner can already post to it</li>
+        </ul>
+        <p class="note">The part normally bought on trust. It exists and can be shown.</p>
+      </div>
+
+      <!-- centre -->
+      <div class="node" style="grid-column:2;grid-row:2">
+        <h3>Ops Live Board</h3>
+        <p>scans → working time → lines per hour vs target</p>
+        <div class="node__nums">
+          <span class="chip">30% done</span>
+          <span class="chip">18–22 wks left</span>
+          <span class="chip">€20k–€46k</span>
+        </div>
+      </div>
+
+      <!-- row 2 sides -->
+      <div class="box box--src" style="grid-column:1;grid-row:2">
+        <h4>Systems to pull from <span class="chip chip--time">5–8 wks</span></h4>
+        <ul>
+          <li><i class="m m--todo">○</i> <b>Warehouse suite (KNAPP KiSoft)</b> — order lines and numbers, pick and shortage confirmations, locations, stock, log-ins</li>
+          <li><i class="m m--todo">○</i> <b>Plant monitoring (SCADA)</b> — running or stopped, faults, planned stops</li>
+          <li><i class="m m--ask">⚠</i> <b>CSD</b> — needs defining: what it holds, who owns it</li>
+          <li><i class="m m--todo">○</i> <b>Rota / HR</b> — real shifts and break times</li>
+        </ul>
+        <p class="note">Real order data, and “the line stopped” told apart from “the picker slowed” · <span class="chip chip--eur">€6.8k–€15.7k</span></p>
+      </div>
+
+      <div class="box box--build" style="grid-column:3;grid-row:2">
+        <h4>To build <span class="chip chip--time">overlapping</span></h4>
+        <ul>
+          <li><i class="m m--todo">○</i> <b>One adapter per source</b> — turns that system’s messages into the one shape the board understands</li>
+          <li><i class="m m--todo">○</i> <b>Memory</b> — a database, so yesterday survives a restart</li>
+          <li><i class="m m--todo">○</i> <b>Sign-in and roles</b> — only a manager takes someone off task</li>
+          <li><i class="m m--todo">○</i> <b>Hardening</b> — monitoring, backup, a server that survives a bad night</li>
+        </ul>
+        <p class="note">None of it changes the rules or the screens · <span class="chip chip--eur">€3.6k–€7.8k</span></p>
+      </div>
+
+      <!-- row 3 -->
+      <div class="box box--people" style="grid-column:1;grid-row:3">
+        <h4>Must be agreed <span class="chip chip--time">4–8 wks, parallel</span></h4>
+        <ul>
+          <li><i class="m m--todo">○</i> <b>Employee representatives</b> — how performance may be shown, and to whom</li>
+          <li><i class="m m--todo">○</i> <b>Data protection</b> — named or anonymous, how long it is kept</li>
+          <li><i class="m m--todo">○</i> <b>IT security</b> — where the server sits, what reaches it</li>
+        </ul>
+        <p class="note">Starts day one. Nothing goes live until it closes.</p>
+      </div>
+
+      <div class="box box--people" style="grid-column:2;grid-row:3">
+        <h4>Who speaks to whom <span class="chip chip--time">weekly</span></h4>
+        <ul>
+          <li><i class="m m--todo">○</i> Warehouse system supplier · interfaces</li>
+          <li><i class="m m--todo">○</i> Device suppliers · scanner behaviour</li>
+          <li><i class="m m--todo">○</i> Internal IT · network, server, devices</li>
+          <li><i class="m m--todo">○</i> Automation team · plant signals</li>
+          <li><i class="m m--done">✓</i> Department management · weekly, running</li>
+        </ul>
+        <p class="note">Full map with cadence and gates on page 5</p>
+      </div>
+
+      <div class="box box--build" style="grid-column:3;grid-row:3">
+        <h4>Proving it <span class="chip chip--time">5–7 wks</span></h4>
+        <ul>
+          <li><i class="m m--todo">○</i> <b>Pilot on one leg of stations</b> — real shifts, real scans, thresholds tuned to what supervisors see</li>
+          <li><i class="m m--todo">○</i> <b>Then the rest</b> — remaining stations, training, documentation, support</li>
+        </ul>
+        <p class="note">Where the estimate stops being an estimate · <span class="chip chip--eur">€5k–€11.7k</span></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>Page 2 of 6 · The project on one page</span>
+    <span>Ranges are indicative · the two biggest unknowns are the warehouse interface and CSD</span>
+  </div>
+</section>
+
+<!-- ================= PAGE 3 — STAGES ================= -->
+<section class="page">
+  <p class="kicker">3 · Money and time, stage by stage</p>
+  <h2 class="title">What each step costs and how long it really takes</h2>
+  <p class="sub">Effort is days of build. Elapsed is calendar weeks, which is longer, because most steps wait on someone else's answer.</p>
+
+  <div class="two" style="grid-template-columns:1.95fr 1fr;gap:8mm">
+    <div>
+      <table class="tbl">
+        <tr>
+          <th>Stage</th><th>What happens</th><th class="n">Effort</th><th class="n">Elapsed</th><th class="n">Indicative cost</th><th>Status</th>
+        </tr>
+        <tr class="done">
+          <td class="w">0 · Prototype</td>
+          <td>The board, the rules, the simulated shift, both handovers</td>
+          <td class="n">18–22 d</td><td class="n">—</td><td class="n">spent</td>
+          <td><i class="m m--done">✓</i> done</td>
+        </tr>
+        <tr>
+          <td class="w">1 · Access</td>
+          <td>Confirm every interface, get specifications and a test environment, name one contact per system</td>
+          <td class="n">6–8 d</td><td class="n">2–3 wks</td><td class="n">€2.7k–€5.2k</td>
+          <td><i class="m m--todo">○</i> next</td>
+        </tr>
+        <tr>
+          <td class="w">2 · Devices</td>
+          <td>One handheld and one wearable sending real scans on a bench; real barcodes captured, reader retuned</td>
+          <td class="n">5–8 d</td><td class="n">2–3 wks</td><td class="n">€2.3k–€5.2k</td>
+          <td><i class="m m--todo">○</i></td>
+        </tr>
+        <tr>
+          <td class="w">3 · Warehouse suite</td>
+          <td>Order lines, order numbers, locations, stock, shortage confirmations, picker log-ins</td>
+          <td class="n">10–15 d</td><td class="n">3–4 wks</td><td class="n">€4.5k–€9.8k</td>
+          <td><i class="m m--todo">○</i></td>
+        </tr>
+        <tr>
+          <td class="w">4 · Plant &amp; central</td>
+          <td>Equipment state from SCADA; whatever CSD turns out to be</td>
+          <td class="n">5–9 d</td><td class="n">2–3 wks</td><td class="n">€2.3k–€5.9k</td>
+          <td><i class="m m--ask">⚠</i> part unknown</td>
+        </tr>
+        <tr>
+          <td class="w">5 · Make it permanent</td>
+          <td>Database, sign-in and roles, backup, monitoring, a server that survives a bad night</td>
+          <td class="n">8–12 d</td><td class="n">2–3 wks</td><td class="n">€3.6k–€7.8k</td>
+          <td><i class="m m--todo">○</i></td>
+        </tr>
+        <tr>
+          <td class="w">6 · Pilot</td>
+          <td>One leg of stations on real shifts; thresholds tuned; supervisors sign it off</td>
+          <td class="n">6–10 d</td><td class="n">3–4 wks</td><td class="n">€2.7k–€6.5k</td>
+          <td><i class="m m--todo">○</i></td>
+        </tr>
+        <tr>
+          <td class="w">7 · Rollout</td>
+          <td>Remaining stations, training, documentation, agreed support</td>
+          <td class="n">5–8 d</td><td class="n">2–3 wks</td><td class="n">€2.3k–€5.2k</td>
+          <td><i class="m m--todo">○</i></td>
+        </tr>
+        <tr>
+          <td class="w">In parallel</td>
+          <td>Employee representatives, data protection, IT security — our time is small, the wait is not</td>
+          <td class="n">2–4 d</td><td class="n">4–8 wks</td><td class="n">€0.9k–€2.6k</td>
+          <td><i class="m m--todo">○</i> starts day one</td>
+        </tr>
+        <tr class="total">
+          <td class="w">Remaining</td>
+          <td>Stages 1–7 and the agreements, overlapping where they can</td>
+          <td class="n">45–70 d</td><td class="n">18–22 wks</td><td class="n">€20k–€46k</td>
+          <td></td>
+        </tr>
+      </table>
+    </div>
+
+    <div>
+      <h3 class="sec">How to read the money</h3>
+      <div class="callout">
+        <b>Days × a placeholder day rate</b>
+        Build effort only, at an assumed blended rate — replace the rate and every figure moves with it. The spread
+        is not padding: it is the difference between a warehouse interface that is documented and one that has to be
+        discovered.
+      </div>
+      <div class="callout callout--risk" style="margin-top:4mm">
+        <b>Not included anywhere above</b>
+        Devices and licences · the server · network changes · other teams' hours · support once live. These sit with the
+        departments that already own them.
+      </div>
+      <div class="callout callout--done" style="margin-top:4mm">
+        <b>Why stage 0 being done matters</b>
+        The part normally bought on trust — what it looks like, what it measures, whether anyone reads it — already
+        exists. What remains is plumbing, agreement and proof, all far easier to estimate than invention.
+      </div>
+      <div class="callout callout--ask" style="margin-top:4mm">
+        <b>What would move the total</b>
+        A warehouse interface needing vendor development · CSD turning out to be a system rather than a feed · every
+        department at once rather than one first.
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>Page 3 of 6 · Money and time</span>
+    <span>Effort in build days · elapsed in calendar weeks · costs at a placeholder day rate</span>
+  </div>
+</section>
+
+<!-- ================= PAGE 4 — DATA ================= -->
+<section class="page">
+  <p class="kicker">4 · Where the data comes from</p>
+  <h2 class="title">What we pull, from which system, and who has to say yes</h2>
+  <p class="sub">Every source is turned into the same simple message, so the board never cares which system a scan came from. What differs is who owns the tap, and how hard it is to open.</p>
+
+  <table class="tbl" style="--pad:3px">
+    <tr>
+      <th>Source</th><th>What we pull from it</th><th>How it would arrive</th><th>Who opens it</th><th>What it unlocks</th><th>Status</th>
+    </tr>
+    <tr>
+      <td class="w">Warehouse suite<br><span style="font-weight:400;color:var(--muted);font-size:11.5px">KNAPP KiSoft · WMS / WES / WCS</span></td>
+      <td>Order lines with order and invoice numbers · pick confirmations · shortage confirmations · location master · stock per location · picker log-ins</td>
+      <td>The host interface for our version and site — message, file or API. To be confirmed by the supplier, as it differs per installation.</td>
+      <td>System supplier<br>+ internal IT</td>
+      <td>Real product names, quantities and order numbers in place of placeholders; shortages traceable to an order</td>
+      <td><i class="m m--todo">○</i> not started</td>
+    </tr>
+    <tr>
+      <td class="w">Handheld scanners<br><span style="font-weight:400;color:var(--muted);font-size:11.5px">DENSO</span></td>
+      <td>Every scan with its time and station · reads that failed</td>
+      <td>Already supported three ways: as keyboard input, as a direct post, or from a small app on the device</td>
+      <td>Device supplier<br>+ internal IT</td>
+      <td>Lines per hour, and label or read failures told apart from slowness</td>
+      <td><i class="m m--part">◑</i> accepted, not fed</td>
+    </tr>
+    <tr>
+      <td class="w">Wearables<br><span style="font-weight:400;color:var(--muted);font-size:11.5px">Honeywell CW45 + 8675i ring</span></td>
+      <td>Scans per wearer · decode failures the device reports itself · the moment the ring loses or regains its Bluetooth link</td>
+      <td>A small Android app on the wearable, using the supplier's toolkit, forwarding to the same door as everything else</td>
+      <td>Device supplier<br>+ device management</td>
+      <td>Time lost to equipment, separated from time lost to pace — today the two are indistinguishable</td>
+      <td><i class="m m--todo">○</i> not started</td>
+    </tr>
+    <tr>
+      <td class="w">Plant monitoring<br><span style="font-weight:400;color:var(--muted);font-size:11.5px">SCADA</span></td>
+      <td>Equipment running or stopped · fault and component status · planned stops</td>
+      <td>A read-only tag or event feed from the monitoring layer</td>
+      <td>Automation / controls team</td>
+      <td>A stopped station stops being counted against the person standing at it</td>
+      <td><i class="m m--todo">○</i> not started</td>
+    </tr>
+    <tr>
+      <td class="w">Central system<br><span style="font-weight:400;color:var(--muted);font-size:11.5px">CSD</span></td>
+      <td><b>To be defined</b> — what it holds, whether it duplicates the warehouse suite, and what may be read from it</td>
+      <td>Unknown until the above is answered</td>
+      <td>To be identified</td>
+      <td>Unknown — possibly nothing we need, possibly the cleanest source of order data</td>
+      <td><i class="m m--ask">⚠</i> to confirm</td>
+    </tr>
+    <tr>
+      <td class="w">Rota / HR</td>
+      <td>Real shift pattern · break lengths · who is rostered</td>
+      <td>A file or a scheduled export; no live link needed</td>
+      <td>HR</td>
+      <td>Correct measuring windows, so breaks never count against anyone</td>
+      <td><i class="m m--todo">○</i> not started</td>
+    </tr>
+    <tr>
+      <td class="w">The board's own settings</td>
+      <td>Target, thresholds, shift definitions, the rates used in the cost handover</td>
+      <td>A single configuration file, already in place</td>
+      <td>Department + finance</td>
+      <td>Everything the board judges; changing one number re-reads every screen</td>
+      <td><i class="m m--done">✓</i> working</td>
+    </tr>
+  </table>
+
+  <div class="three" style="margin-top:3mm">
+    <div class="callout">
+      <b>One shape for everything</b>
+      Each source gets a small adapter, and after it every scan looks identical to the board — which is why adding a
+      source later is days, not weeks.
+    </div>
+    <div class="callout callout--risk">
+      <b>The one that can hurt the timeline</b>
+      The warehouse interface. Specifications differ by version and site, and the answer comes from the supplier, not
+      from us — which is why it is first in the plan.
+    </div>
+    <div class="callout callout--ask">
+      <b>The open question</b>
+      CSD is listed because it was named as part of the landscape, but nothing defines it yet. Until someone says what it
+      is, it carries no estimate and no promise.
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>Page 4 of 6 · Data sources</span>
+    <span>Every supplier item differs by site and version — each is confirmed before it is built</span>
+  </div>
+</section>
+
+<!-- ================= PAGE 5 — PEOPLE ================= -->
+<section class="page">
+  <p class="kicker">5 · Who speaks to whom</p>
+  <h2 class="title">The conversations that actually move this forward</h2>
+  <p class="sub">Most of the elapsed time on page 3 is not build time — it is the wait between asking one of these groups a question and getting an answer.</p>
+
+  <div class="people">
+    <div class="who">
+      <h4>Department management</h4>
+      <p class="role">Owns the problem</p>
+      <ul>
+        <li>Sets the target and what counts as a good shift</li>
+        <li>Chooses which leg of stations pilots first</li>
+        <li>Approves each stage</li>
+      </ul>
+      <p class="cad">Weekly · already running</p>
+    </div>
+    <div class="who">
+      <h4>Warehouse system supplier</h4>
+      <p class="role">Owns the order data</p>
+      <ul>
+        <li>Confirms the interface for our version and site</li>
+        <li>Provides a test environment</li>
+        <li>Names one technical contact</li>
+      </ul>
+      <p class="cad">First conversation · blocks stage 3</p>
+    </div>
+    <div class="who">
+      <h4>Device suppliers</h4>
+      <p class="role">Own the scanners</p>
+      <ul>
+        <li>Exact models and firmware in use</li>
+        <li>How to switch on the “could not read” signal</li>
+        <li>Toolkit and sample code for the wearables</li>
+      </ul>
+      <p class="cad">Second conversation · blocks stage 2</p>
+    </div>
+    <div class="who">
+      <h4>Internal IT</h4>
+      <p class="role">Owns the route</p>
+      <ul>
+        <li>A small server the scanners can reach</li>
+        <li>Network rule between devices and server</li>
+        <li>Permission to put one small app on the wearables</li>
+      </ul>
+      <p class="cad">Early · blocks everything on the floor</p>
+    </div>
+    <div class="who">
+      <h4>Automation / controls</h4>
+      <p class="role">Owns the plant signals</p>
+      <ul>
+        <li>Read-only access to equipment state</li>
+        <li>Which signals mean a genuine stop</li>
+        <li>Planned stop calendar</li>
+      </ul>
+      <p class="cad">Before stage 4</p>
+    </div>
+    <div class="who">
+      <h4>Employee representatives</h4>
+      <p class="role">Own the consent</p>
+      <ul>
+        <li>Whether names or neutral codes are shown</li>
+        <li>Who may see performance, and in what form</li>
+        <li>Signs off before anything reaches the floor</li>
+      </ul>
+      <p class="cad">From day one · hard gate</p>
+    </div>
+    <div class="who">
+      <h4>Data protection</h4>
+      <p class="role">Owns the rules</p>
+      <ul>
+        <li>What is kept and for how long</li>
+        <li>Lawful basis for measuring</li>
+        <li>Reviews the same document as above</li>
+      </ul>
+      <p class="cad">From day one · hard gate</p>
+    </div>
+    <div class="who">
+      <h4>Shift supervisors</h4>
+      <p class="role">Own whether it is used</p>
+      <ul>
+        <li>Tell us when a number looks wrong</li>
+        <li>Tune the thresholds against what they see</li>
+        <li>Decide whether the handover is worth printing</li>
+      </ul>
+      <p class="cad">Daily during the pilot</p>
+    </div>
+  </div>
+
+  <div class="two" style="margin-top:4mm;flex:none">
+    <div class="callout callout--ask">
+      <b>Two hard gates, and only two</b>
+      No real person's name reaches a screen before the employee representatives and data protection have both signed.
+      The board can already replace every name with a neutral code, so the pilot can run either way — but that decision
+      is theirs, not ours.
+    </div>
+    <div class="callout">
+      <b>The two conversations to have first</b>
+      The warehouse system supplier and the device suppliers: together they decide whether stages 2 and 3 take three
+      weeks or eight, which is most of the spread in the total.
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>Page 5 of 6 · Who speaks to whom</span>
+    <span>Pickers are not asked to do anything differently at any stage</span>
+  </div>
+</section>
+
+<!-- ================= PAGE 6 — TIMELINE ================= -->
+<section class="page">
+  <p class="kicker">6 · Indicative projection</p>
+  <h2 class="title">How the weeks are likely to fall</h2>
+  <p class="sub">A projection, not a commitment: it assumes the first answers arrive within two weeks and that one department pilots before the rest.</p>
+
+  <div class="gantt">
+    <div class="hd" style="grid-row:1;grid-column:1"></div>
+    <div class="hd" style="grid-row:1;grid-column:2">1</div>
+    <div class="hd" style="grid-row:1;grid-column:3">2</div>
+    <div class="hd" style="grid-row:1;grid-column:4">3</div>
+    <div class="hd" style="grid-row:1;grid-column:5">4</div>
+    <div class="hd" style="grid-row:1;grid-column:6">5</div>
+    <div class="hd" style="grid-row:1;grid-column:7">6</div>
+    <div class="hd" style="grid-row:1;grid-column:8">7</div>
+    <div class="hd" style="grid-row:1;grid-column:9">8</div>
+    <div class="hd" style="grid-row:1;grid-column:10">9</div>
+    <div class="hd" style="grid-row:1;grid-column:11">10</div>
+    <div class="hd" style="grid-row:1;grid-column:12">11</div>
+    <div class="hd" style="grid-row:1;grid-column:13">12</div>
+    <div class="hd" style="grid-row:1;grid-column:14">13</div>
+    <div class="hd" style="grid-row:1;grid-column:15">14</div>
+    <div class="hd" style="grid-row:1;grid-column:16">15</div>
+    <div class="hd" style="grid-row:1;grid-column:17">16</div>
+    <div class="hd" style="grid-row:1;grid-column:18">17</div>
+    <div class="hd" style="grid-row:1;grid-column:19">18</div>
+    <div class="hd" style="grid-row:1;grid-column:20">19</div>
+    <div class="hd" style="grid-row:1;grid-column:21">20</div>
+    <div class="lbl" style="grid-row:2;grid-column:1">0 · Prototype <i class="m m--done">✓</i></div>
+    <div class="bar bar--done" style="grid-row:2;grid-column:2 / 4"><span>done</span></div>
+    <div class="lbl" style="grid-row:3;grid-column:1">1 · Access &amp; specifications</div>
+    <div class="bar " style="grid-row:3;grid-column:2 / 5"></div>
+    <div class="lbl" style="grid-row:4;grid-column:1">2 · Devices on a bench</div>
+    <div class="bar " style="grid-row:4;grid-column:3 / 6"></div>
+    <div class="lbl" style="grid-row:5;grid-column:1">3 · Warehouse suite</div>
+    <div class="bar " style="grid-row:5;grid-column:5 / 10"></div>
+    <div class="lbl" style="grid-row:6;grid-column:1">4 · Plant signals &amp; CSD</div>
+    <div class="bar " style="grid-row:6;grid-column:7 / 11"></div>
+    <div class="lbl" style="grid-row:7;grid-column:1">5 · Database, sign-in, hardening</div>
+    <div class="bar " style="grid-row:7;grid-column:9 / 13"></div>
+    <div class="lbl" style="grid-row:8;grid-column:1">Agreements (parallel)</div>
+    <div class="bar bar--gate" style="grid-row:8;grid-column:2 / 11"><span>hard gate</span></div>
+    <div class="lbl" style="grid-row:9;grid-column:1">6 · Pilot on one leg</div>
+    <div class="bar " style="grid-row:9;grid-column:12 / 17"></div>
+    <div class="lbl" style="grid-row:10;grid-column:1">7 · Rollout &amp; handover</div>
+    <div class="bar " style="grid-row:10;grid-column:17 / 21"></div>
+  </div>
+
+  <div class="milestones">
+    <div class="ms"><b>Week 3</b>Interfaces confirmed, contacts named</div>
+    <div class="ms"><b>Week 5</b>A real scan from a real scanner on the board</div>
+    <div class="ms"><b>Week 9</b>Real orders and shortages, not placeholders</div>
+    <div class="ms"><b>Week 10</b>Agreements signed — hard gate</div>
+    <div class="ms"><b>Week 12</b>Pilot starts on live shifts</div>
+    <div class="ms"><b>Week 16</b>Supervisors accept, or we tune and repeat</div>
+    <div class="ms"><b>Week 20</b>Whole department live, handed over</div>
+  </div>
+
+  <div class="three" style="margin-top:auto;padding-bottom:2mm">
+    <div class="callout callout--done">
+      <b>Decision asked for now</b>
+      Go-ahead for stage 1 only — two to three weeks, €2.7k–€5.2k indicative. It buys the answers that turn every other
+      range on page 3 into a number, and it commits nothing beyond itself.
+    </div>
+    <div class="callout callout--risk">
+      <b>What makes it slip</b>
+      Waiting on a supplier specification · the agreements starting late rather than on day one · a device fleet that
+      turns out to be mixed · deciding to do every department at once.
+    </div>
+    <div class="callout">
+      <b>What makes it faster</b>
+      A named contact per system in week one · an existing test environment · piloting where the supervisors already
+      want it · accepting neutral codes rather than names for the pilot.
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>Page 6 of 6 · Indicative projection</span>
+    <span>Weeks are elapsed, not effort · all figures estimates at a placeholder day rate</span>
+  </div>
+</section>
+
+</body>
+</html>
