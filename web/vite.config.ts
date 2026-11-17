@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+const allowedHosts = [process.env.RAILWAY_PUBLIC_DOMAIN].filter(Boolean) as string[];
+
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -8,6 +10,7 @@ export default defineConfig({
     // refused. "::" is dual-stack here: both localhost addresses connect.
     host: '::',
     port: 5173,
+    allowedHosts,
     proxy: {
       '/api': { target: 'http://localhost:5174', changeOrigin: true },
       '/ws': { target: 'ws://localhost:5174', ws: true },
@@ -16,4 +19,5 @@ export default defineConfig({
       '/sample-handover': { target: 'http://localhost:5174', changeOrigin: true },
     },
   },
+  preview: { allowedHosts },
 });
