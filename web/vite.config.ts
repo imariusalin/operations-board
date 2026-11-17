@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react';
 
 const allowedHosts = [process.env.RAILWAY_PUBLIC_DOMAIN].filter(Boolean) as string[];
 
+const api = process.env.API_URL ?? 'http://localhost:5174';
+
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -12,11 +14,11 @@ export default defineConfig({
     port: 5173,
     allowedHosts,
     proxy: {
-      '/api': { target: 'http://localhost:5174', changeOrigin: true },
-      '/ws': { target: 'ws://localhost:5174', ws: true },
+      '/api': { target: api, changeOrigin: true },
+      '/ws': { target: api.replace(/^http/, 'ws'), ws: true },
       // The PDFs, served by the API so the board's own address opens them too.
-      '/how-it-works': { target: 'http://localhost:5174', changeOrigin: true },
-      '/sample-handover': { target: 'http://localhost:5174', changeOrigin: true },
+      '/how-it-works': { target: api, changeOrigin: true },
+      '/sample-handover': { target: api, changeOrigin: true },
     },
   },
   preview: { allowedHosts },
