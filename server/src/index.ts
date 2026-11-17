@@ -201,7 +201,7 @@ function broadcast(msg: ServerMessage) {
   }
 }
 
-await app.listen({ port: PORT, host: '0.0.0.0' });
+await app.listen({ port: PORT, host: '::' });
 
 const wss = new WebSocketServer({ server: app.server, path: '/ws' });
 
